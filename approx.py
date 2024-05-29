@@ -10,27 +10,22 @@ h = get_h()
 mu = get_mu()
 cell_size = get_cell()
 
-""" Определение типов """
-
-dtype_for_matrix = np.dtype( [      # Тип для
-    ('array', np.int16, (4)),       # матрицы 
-    ('iteration', np.int32),
-    ('pathway', np.int16)
-] )
-
-dtype_for_repeat_points = np.dtype( [       # Тип для 
-    ('y', np.int16), ('x', np.int16),       # массива с
-    ('curr_arr', np.int16, (4)),            # повторяющимися точками
-    ('edited_arr', np.int16, (4))
-] )
-
-dtype_for_start_points = np.dtype( [
-    ('x', np.float32), ('y', np.float32)
-] )
-
-""" ***************** """
-
 """ Функционал """
+
+def draw_grid(start_point_polygon):
+    running = True
+    i = 0
+    while running:
+        line_x = (start_point_polygon[0, 0] - cell_size) + i * cell_size
+        line_y = (start_point_polygon[1, 1] + cell_size) - i * cell_size
+        i += 1
+        if line_x < start_point_polygon[0, 1]:
+            plt.plot([line_x, line_x], [start_point_polygon[1, 0] - 1, start_point_polygon[1, 1] + 1], '-', linewidth=0.2, color='grey')
+        if line_y > start_point_polygon[1, 0]:
+            plt.plot([start_point_polygon[0, 0] - 1, start_point_polygon[0, 1] + 1], [line_y, line_y], '-', linewidth=0.2, color="grey")
+        if line_x > start_point_polygon[0, 1] + 1 and line_y < start_point_polygon[1, 0] - 1:
+            running = True
+            break
 
 def draw_grafic(point):
     X = point[0]
@@ -74,6 +69,14 @@ def calc_grid_size(cell_size, solution):
     return grid_size, start_point_polygon
 
 @nb.njit(cache=True)
+def calc_middle_iteration(grid):
+    for row in range(grid.shape[0]):
+        for col in range(grid.shape[1]):
+            cell = grid[row, col]
+            if cell['iteration'] != 0 and cell['pathway'] != 0:
+                cell['iteration'] //= cell['pathway']
+
+@nb.njit(cache=True)
 def calc_start_point(polygon, grid_size, cell_size):
     quantity = grid_size * grid_size
     x_min, x_max = polygon[0, 0], polygon[0, 1]
@@ -98,7 +101,7 @@ def error_len(x, y, grid_size):
            0 <= y < grid_size
 
 @nb.njit(cache=True)
-def save_coord_point(coord_point_arr, grid_size, cell_size, point, n):
+def save_coord_point(coord_point_arr, grid, grid_size, cell_size, point, n):
     """ Преобразование точек в координаты матрицы """
     prev_arr = np.array([[
         int( (grid_size - 1) / 2 ) + int( point[0, 0] / cell_size ), # рассчет точек 
@@ -110,8 +113,13 @@ def save_coord_point(coord_point_arr, grid_size, cell_size, point, n):
 
         if(error_len(prev_arr[0][0], prev_arr[0][1], grid_size) and error_len(curr_x, curr_y, grid_size)):
             if prev_arr[0][0] != curr_x or prev_arr[0][1] != curr_y:
+                x, y = prev_arr[0, 0], prev_arr[0, 1]
                 coord_point_arr = np.vstack((coord_point_arr, prev_arr.reshape(1, 2)))
+                grid[y, x]['iteration'] += 1
+            else:
+                grid[y, x]['iteration'] += 1
             prev_arr[0][0], prev_arr[0][1] = curr_x, curr_y
+
     return coord_point_arr[1:]
 
 @nb.njit(cache=True)
@@ -125,22 +133,22 @@ def is_in(e, arr):
     return False
 
 @nb.njit(cache=True)
-def numba_vstack(arr1, arr2, dtype):
+def numba_vstack(arr1, arr2):
     combined_length = len(arr1) + len(arr2)
-    result = np.empty(combined_length, dtype=dtype)
+    result = np.empty(combined_length, dtype=dtype_for_repeat_points)
     result[:len(arr1)] = arr1
     result[len(arr1):] = arr2
     return result
 
 @nb.njit(cache=True)   
-def update_grid_and_repeat_points(grid, point_coords, k, new_value, repeat_points, repeat_points_temp, pathway_counter, dtype):
+def update_grid_and_repeat_points(grid, point_coords, k, new_value, repeat_points, repeat_points_temp, pathway_counter):
     y, x = int(point_coords[1]), int(point_coords[0])
     cell = grid[y, x]
     if cell['array'][k] in (0, new_value):
         cell['array'][k] = new_value
         #cell['iteration'] += 1
-        #if cell['pathway'] <= pathway_counter:
-            #cell['pathway'] += 1
+        if cell['pathway'] <= pathway_counter:
+            cell['pathway'] += 1
     else:
         point_temp = cell['array'].copy()
         point_temp[k] = new_value
@@ -154,12 +162,12 @@ def update_grid_and_repeat_points(grid, point_coords, k, new_value, repeat_point
             repeat_points_temp[0]['curr_arr'] = cell['array'].copy()
             repeat_points_temp[0]['edited_arr'] = point_temp
             if not is_in(repeat_points_temp[0], repeat_points):
-                repeat_points = numba_vstack(repeat_points, repeat_points_temp, dtype)
+                repeat_points = numba_vstack(repeat_points, repeat_points_temp)
     return repeat_points
 
 
 @nb.njit(cache=True)
-def comparison_point(arr, grid, repeat_points, repeat_points_temp, pathway_counter, dtype):
+def comparison_point(arr, grid, repeat_points, repeat_points_temp, pathway_counter):
     for i in nb.prange(1, len(arr) - 1):
         prev_x, prev_y = arr[i - 1]
         curr_x, curr_y = arr[i]
@@ -189,14 +197,12 @@ def comparison_point(arr, grid, repeat_points, repeat_points_temp, pathway_count
         
         # Обновление grid и repeat_points
         repeat_points = update_grid_and_repeat_points(grid, arr[i], k, new_value, repeat_points,
-                                                      repeat_points_temp, pathway_counter, dtype)
+                                                      repeat_points_temp, pathway_counter)
     return repeat_points
 
 #@nb.njit(cache=True)
-def create_grid(grid, repeat_points, grid_size, repeat_points_temp, cell_size, start_point_arr, dtype):
-    max_points = grid_size * grid_size * n  # Предполагаемое максимальное количество точек
-    coord_point_arr = np.empty((max_points, 2), dtype=np.float64)  # Используйте тип данных, соответствующий вашему случаю
-    point_count = 0
+def create_grid(grid, repeat_points, grid_size, repeat_points_temp, cell_size, start_point_arr):
+    coord_point_arr = np.empty((0, 2), dtype=np.float64)  # Используйте тип данных, соответствующий вашему случаю
     
     for i in range(len(start_point_arr)):
         start_point = start_point_arr[i]
@@ -204,17 +210,14 @@ def create_grid(grid, repeat_points, grid_size, repeat_points_temp, cell_size, s
         point = method_euler(start_point, n, h, mu)
         draw_grafic(point)
         # Сохранение координат точек
-        new_points = save_coord_point(coord_point_arr[point_count:], grid_size, cell_size, point, n)
-        point_count += len(new_points)
-        
+        new_points = save_coord_point(coord_point_arr, grid, grid_size, cell_size, point, n)
+
         # Обновление repeat_points
-        repeat_points = comparison_point(new_points, grid, repeat_points, repeat_points_temp, pathway_counter, dtype)
-    
-    # Обрезка неиспользованной части coord_point_arr
-    coord_point_arr = coord_point_arr[:point_count]
-    
+        repeat_points = comparison_point(new_points, grid, repeat_points, repeat_points_temp, pathway_counter)
+
     # Вычисление среднего количества итераций
-    #calc_middle_iteration(grid)
+
+    calc_middle_iteration(grid)
     
     return grid, repeat_points
 

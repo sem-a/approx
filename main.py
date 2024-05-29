@@ -27,16 +27,17 @@ def approx():
 
     grid = np.zeros((matrix_size, matrix_size), dtype=ap.dtype_for_matrix)
 
-    repeat_points = np.zeros((0), dtype=ap.dtype_for_repeat_points) # an array of points 
+    repeat_points = np.zeros((0), dtype=dtype_for_repeat_points) # an array of points 
                                                                 # that change repeatedly
 
-    repeat_points_temp = np.zeros((1), dtype=ap.dtype_for_repeat_points)
+    repeat_points_temp = np.zeros((1), dtype=dtype_for_repeat_points)
 
-    grid, repeat_points = ap.create_grid(grid, repeat_points, matrix_size, repeat_points_temp, cell_size, start_point_arr, ap.dtype_for_repeat_points)
+    grid, repeat_points = ap.create_grid(grid, repeat_points, matrix_size, repeat_points_temp, cell_size, start_point_arr)
     
     end_time = t.time()
-    print(f"Время выполнения программы: {end_time - start_time} сек.\nРазмер клетки: {cell_size}\nРазмер матрицы: {len(grid)}")
+    print(f"Время выполнения программы: {end_time - start_time} сек.\nРазмер клетки: {cell_size}\nРазмер матрицы: {matrix_size}")
 
+    np.save(f'{matrix_size}', grid)
     # Сохранение данных grid в файл
     grid_filename = os.path.join(save_folder, f'{matrix_size}.txt')
     np.savetxt(grid_filename, grid[::-1], fmt='%s')
@@ -49,17 +50,17 @@ def approx():
 
     # Сохранение графика
     plt_filename = os.path.join(save_folder, f'{matrix_size}.svg')
+    
+
+    ap.draw_grid(start_point_polygon)
     plt.savefig(plt_filename)
+    plt.plot()
 
 
-def change_func():
-    print('Изменить функцию')
-
-# Функция для изменения параметров
 def change_param():
 
     while True:
-        # Создаем список выбора с помощью radiolist_dialog
+        
         result = radiolist_dialog(
             title='Изменить параметры',
             text='Выберите параметр для изменения:',
@@ -85,41 +86,38 @@ def change_param():
                 set_cell(float(new_cell_size))
         elif result == 'back':
             break
+        elif result is None:
+            break
 
-# Функция для запуска интерактивного меню
+
 def run_menu():
-    # Создаем список выбора с помощью radiolist_dialog
+    
     result = radiolist_dialog(
         title='Аппроксимация непрерывной модели мультивибратора моделью с конечным множеством состояний',
         text='Выберите опцию:',
         values=[
             ('approx', 'Аппроксимировать'),
             ('ch_params', 'Изменить параметры'),
-            ('ch_system', 'Изменить систему'),
             ('exit', 'Выход'),
         ],
     ).run()
 
     return result
 
-# Основная функция
 def main():
     while True:
-        # Запускаем меню и получаем результат
+        
         selected = run_menu()
 
-        # Проверяем результат и выполняем соответствующее действие
+        
         if selected == 'approx':
             approx()
-            # Здесь должен быть код для аппроксимации с использованием текущих параметров h, mu и cell_size
         elif selected == 'ch_params':
             change_param()
-        elif selected == 'ch_system':
-            change_func()
         elif selected == 'exit':
-            # Выход из программы
+            break
+        elif selected is None:
             break
 
-# Запускаем основную функцию
 if __name__ == '__main__':
     main()
