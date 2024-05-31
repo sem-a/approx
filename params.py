@@ -37,20 +37,20 @@ _cell_size = 1.02 # размер клетки
 
 """ Определение типов """
 
-dtype_for_matrix = np.dtype( [      # Тип для
+dtype_for_matrix = np.dtype( [      # Структура для
     ('array', np.int16, (4)),       # матрицы 
     ('iteration', np.int32),
     ('pathway', np.int16)
 ] )
 
-dtype_for_repeat_points = np.dtype( [       # Тип для 
+dtype_for_repeat_points = np.dtype( [       # Структура для 
     ('y', np.int16), ('x', np.int16),       # массива с
     ('curr_arr', np.int16, (4)),            # повторяющимися точками
     ('edited_arr', np.int16, (4))
 ] )
 
-dtype_for_start_points = np.dtype( [
-    ('x', np.float32), ('y', np.float32)
+dtype_for_start_points = np.dtype( [        # Структура для
+    ('x', np.float32), ('y', np.float32)    # массива стартовых точек
 ] )
 
 """ ***************** """
